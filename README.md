@@ -24,7 +24,9 @@ You may also use the os.loadAPI to load the API
   -- That way you get a the gui Object within a gui object (so you need to call gui.gui.<method>)
 ```
 
-This behavior may be changed in Feature
+This behavior may be changed in feature
+
+*Tip: If you want the API to be loaded on every computer, copy the file (without .lua) to .minecraft\mods\ComputerCraft\lua\rom\apis\*
 
 Usage
 -----
