@@ -1,10 +1,13 @@
 --------------------------------------------------------------------------------
 -- Computer Craft GUI API by jpossi   (jascha@ja-s.de)                        --
+--  https://github.com/possi/computercraft_gui                                --
 --                                                                            --
 -- Copyright: GPL 2 http://www.gnu.de/documents/gpl-2.0.en.html               --
 --------------------------------------------------------------------------------
 
-local api = {}
+local api = {
+    debug = false
+}
 
 -- -------------------
 --  Helper
@@ -40,12 +43,14 @@ local function calculateNegativePos(x, y, w, h)
 end
 
 local function pdebug(...)
+    if not api.debug then return end
     term.setBackgroundColor(colors.black)
     term.setTextColor(colors.yellow)
     print(...)
 end
 local pxdebug_y = 1
 local function pxdebug(...)
+    if not api.debug then return end
     term.setBackgroundColor(colors.black)
     term.setTextColor(colors.yellow)
     local x, y = term.getCursorPos()
@@ -97,10 +102,14 @@ end
 -- 
 
 local frame = extend(colorAble)
-function frame._init(self, x, y, w, h)
+function frame._init(self)
     colorAble._init(self)
     self.widgets = {}
-    self.pos = {x = x, y = y}
+    if x ~= nil and y ~= nil then
+        self:setPosition(x, y)
+    else
+        self.pos = {x = x, y = y}
+    end
     self.size = {w = w, h = h}
 end
 function frame:getParentSize()
@@ -159,15 +168,20 @@ function frame:remove(widget)
     return nil
 end
 function frame:draw(screen)
+    pxdebug(term.getCursorPos())
+    pxdebug(self:getCursorPosition())
+    pdebug(self.c.bg)
     if self.c.bg ~= nil then
-        for x = self.pos.x, self.pos.x + self.size.w - 1 do
-            for y = self.pos.y, self.pos.y + self.size.h - 1 do
-                paintutils.drawPixel(x, y, self.c.bg)
+        for x = 1, self.size.w do
+            for y = 1, self.size.h do
+                local ax, ay = self:getAbsolutePosition(x, y)
+                paintutils.drawPixel(ax, ay, self.c.bg)
             end
         end
     end
     self:applyColors()
     self:setCursorPosition(1, 1)
+    pxdebug("frame painted: ", self)
     for i, widget in pairs(self.widgets) do
         if type(widget) == "function" then
             widget(self)
@@ -176,20 +190,22 @@ function frame:draw(screen)
                 term.setCursorPos(self:getAbsolutePosition(widget:getPosition()))
             end
             widget:draw(self)
+        else
+            pxdebug("hidden: ", widget)
         end
         self:applyColors()
     end
 end
 function frame:click(frame, event, x, y)
-    --pdebug("@", x, ", ", y)
+    pdebug("@", x, ", ", y)
     for i, widget in pairs(self.widgets) do
         if (type(widget) == "table" and widget.getPosition ~= nil) then
             local px, py = widget:getPosition()
             local w, h = widget:getSize()
-            --pdebug(px, ",", py, " + ", w, ",", h)
+            pdebug(px, ",", py, " + ", w, ",", h)
             if (x >= px and x < px + w and y >= py and y < py + h) then
-                --pdebug("click")
-                widget:click(self, event, x, y)
+                pdebug("click")
+                widget:click(self, event, x - px + 1, y - py + 1)
             end
         end
     end
@@ -248,6 +264,7 @@ function screen:getSize()
 end
 function screen:draw()
     self:applyColors()
+    pxdebug_y = 1
     term.clear()
     if self.cb.draw ~= nil then
         self.cb.draw(self)
@@ -306,6 +323,8 @@ function screen:getRelativePosition(x, y)
     return x, y
 end
 function screen:reset()
+    pxdebug_y = 1
+    term.setTextColor(colors.white)
     term.setBackgroundColor(colors.black)
     term.clear()
     term.setCursorPos(1, 1)
