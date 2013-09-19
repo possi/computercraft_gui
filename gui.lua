@@ -23,7 +23,7 @@ local function create(class, ...)
         return class.new(...)
     else
         local obj = extend(class)
-        if (class._init ~= nil) then
+        if (obj._init ~= nil) then
             obj:_init(...)
         end
         return obj
@@ -105,12 +105,24 @@ local frame = extend(colorAble)
 function frame._init(self)
     colorAble._init(self)
     self.widgets = {}
-    if x ~= nil and y ~= nil then
-        self:setPosition(x, y)
-    else
-        self.pos = {x = x, y = y}
-    end
-    self.size = {w = w, h = h}
+    self.pos = {x = nil, y = nil}
+    self.padding = {t = 0, r = 0, b = 0, l = 0}
+    self.size = {w = nil, h = nil}
+end
+function frame:setPadding(t, r, b, l)
+    self.padding = {
+        t = t,
+        r = r ~= nil and r or t,
+        b = b ~= nil and b or t,
+        l = l ~= nil and l or (r ~= nil and r or t),
+    }
+end
+function frame:getPadding()
+    return self.padding
+end
+function frame:getInnerSize()
+    local w, h = self:getSize()
+    return w - self.padding.l - self.padding.r, h - self.padding.t - self.padding.b
 end
 function frame:getParentSize()
     local pw, ph = nil, nil
@@ -180,7 +192,7 @@ function frame:draw(screen)
         end
     end
     self:applyColors()
-    self:setCursorPosition(1, 1)
+    self:setCursorPosition(1 + self.padding.l, 1 + self.padding.t)
     pxdebug("frame painted: ", self)
     for i, widget in pairs(self.widgets) do
         if type(widget) == "function" then
@@ -227,8 +239,8 @@ end
 function frame:setCursorPosition(x, y)
     return term.setCursorPos(self:getAbsolutePosition(x, y))
 end
-function frame:frame(x, y, w, h)
-    return self:add(create(frame, x, y, w, h))
+function frame:frame()
+    return self:add(create(frame))
 end
 
 -- 
@@ -246,6 +258,9 @@ do
         "add",
         "click",
         "remove",
+        "setPadding",
+        "getPadding",
+        "getInnerSize",
         "setCursorPosition",
         "getCursorPosition",
         "frame",
@@ -258,6 +273,7 @@ function screen._init(self)
     colorAble._init(self)
     self.widgets = {}
     self.cb = {draw = nil, adraw = nil}
+    self.padding = {t = 0, r = 0, b = 0, l = 0}
 end
 function screen:getSize()
     return term.getSize()
@@ -266,11 +282,11 @@ function screen:draw()
     self:applyColors()
     pxdebug_y = 1
     term.clear()
+    term.setCursorPos(1 + self.padding.l, 1 + self.padding.t)
     if self.cb.draw ~= nil then
         self.cb.draw(self)
     end
     for i, widget in ipairs(self.widgets) do
-        --self:_drawItem(v)
         if type(widget) == "function" then
             widget(self)
         elseif not widget.hide then
@@ -298,15 +314,6 @@ function screen:wait()
         if (event == "monitor_touch" or event == "mouse_click") then
             local x, y = a2, a3
             self:click(nil, event, x, y)
-            --[[for i, widget in ipairs(self.widgets) do
-                if (type(widget) == "table" and widget.getPosition ~= nil) then
-                    local px, py = widget:getPosition()
-                    local w, h = widget:getSize()
-                    if (x >= px and x < px + w and y >= py and y < py + h) then
-                        widget:click(self, event, x, y)
-                    end
-                end
-            end]]
         end
     until not self.wait
 end
@@ -362,11 +369,15 @@ function text:draw(screen)
     local p = self.parent
     local x, y = p:getCursorPosition()
     
+    --print(self.c.fg, " ")
+    pxdebug(self.text:sub(1, 4), "#", self.c.bg)
+    --d(self.c)
     self:applyColors()
+    
     self.size = {w = 0, h = 1}
     self.pos = {x = x, y = y}
     
-    local linelength, blockheight = p:getSize()
+    local linelength, blockheight = p:getInnerSize()
     
     local offset = 1
     local i = string.find(self.text, "%s")
@@ -444,8 +455,19 @@ end
 function button:onClick(callback)
     self.cb = callback
 end
-function button:click(screen, event, x, y)
-    self:cb(screen, event, x, y)
+function button:click(frame, event, x, y)
+    --[[if (self.parent ~= nil and self.c.fg ~= nil and self.c.bg ~= nil and self.pos.x ~= nil and self.pos.y ~= nil) then
+        self.parent:setCursorPosition(self.pos.x, self.pos.y)
+        local tmp = {self.c.fg, self.c.bg};
+        self.c.fg = tmp.bg;
+        self.c.bg = tmp.fg;
+        self:draw()
+        self.c = tmp;
+        sleep(0.2)
+    end]]
+    if (self ~= nil) then
+        self.cb(self, frame, event, x, y)
+    end
 end
 
 
@@ -456,12 +478,16 @@ end
 local radioGroup = extend(widget)
 function radioGroup._init(self)
     self.entries = {}
+    self.cb = {change = nil}
     self.value = nil
     --self.padding = 0
 end
 --[[function radioGroup:setPadding(c)
     self.padding = c
 end]]
+function radioGroup:onChange(callback)
+    self.cb.change = callback
+end
 function radioGroup:addEntry(value, label)
     if (self.parent == nil) then
         error("A parent have to be set first", 2)
@@ -474,6 +500,9 @@ function radioGroup:addEntry(value, label)
     b.value = value
     b.label = label
     b:onClick(function(button, frame, event, x, y)
+        if (this.cb.change ~= nil) then
+            this.cb.change(this, button, this.value, button.value, frame)
+        end
         this.value = button.value
         frame:getScreen():draw()
     end)
