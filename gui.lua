@@ -6,7 +6,8 @@
 --------------------------------------------------------------------------------
 
 local api = {
-    debug = false
+    debug = false,
+    screenThreadInterval = 1,
 }
 
 -- -------------------
@@ -57,9 +58,15 @@ local function pxdebug(...)
     term.setCursorPos(1, pxdebug_y)
     print(...)
     local tmpx, tmpy = term.getCursorPos()
-    pxdebug_y = tmpy;
+    pxdebug_y = tmpy
+    local w, h = term.getSize()
+    if (pxdebug_y > h) then
+        pxdebug_y = 1
+    end
     term.setCursorPos(x, y)
 end
+api.pxdebug = pxdebug
+api.pdebug = pdebug
 
 -- -------------------
 --  GUI-Interfaces
@@ -180,9 +187,9 @@ function frame:remove(widget)
     return nil
 end
 function frame:draw(screen)
-    pxdebug(term.getCursorPos())
-    pxdebug(self:getCursorPosition())
-    pdebug(self.c.bg)
+    --pxdebug(term.getCursorPos())
+    --pxdebug(self:getCursorPosition())
+    --pdebug(self.c.bg)
     if self.c.bg ~= nil then
         for x = 1, self.size.w do
             for y = 1, self.size.h do
@@ -193,7 +200,7 @@ function frame:draw(screen)
     end
     self:applyColors()
     self:setCursorPosition(1 + self.padding.l, 1 + self.padding.t)
-    pxdebug("frame painted: ", self)
+    --pxdebug("frame painted: ", self)
     for i, widget in pairs(self.widgets) do
         if type(widget) == "function" then
             widget(self)
@@ -203,20 +210,20 @@ function frame:draw(screen)
             end
             widget:draw(self)
         else
-            pxdebug("hidden: ", widget)
+            --pxdebug("hidden: ", widget)
         end
         self:applyColors()
     end
 end
 function frame:click(frame, event, x, y)
-    pdebug("@", x, ", ", y)
+    --pdebug("@", x, ", ", y)
     for i, widget in pairs(self.widgets) do
         if (type(widget) == "table" and widget.getPosition ~= nil) then
             local px, py = widget:getPosition()
             local w, h = widget:getSize()
-            pdebug(px, ",", py, " + ", w, ",", h)
+            --pdebug(px, ",", py, " + ", w, ",", h)
             if (x >= px and x < px + w and y >= py and y < py + h) then
-                pdebug("click")
+                --pdebug("click")
                 widget:click(self, event, x - px + 1, y - py + 1)
             end
         end
@@ -272,7 +279,7 @@ end
 function screen._init(self)
     colorAble._init(self)
     self.widgets = {}
-    self.cb = {draw = nil, adraw = nil}
+    self.cb = {draw = nil, adraw = nil, thread = nil}
     self.padding = {t = 0, r = 0, b = 0, l = 0}
 end
 function screen:getSize()
@@ -307,13 +314,27 @@ end
 function screen:afterDraw(callback)
     self.cb.adraw = callback
 end
+function screen:setThread(routine)
+    self.cb.thread = routine
+end
 function screen:wait()
     self.wait = true
+    local timer;
+    if (self.cb.thread ~= nil) then
+        timer = os.startTimer(api.screenThreadInterval)
+    end
     repeat
         local event, a1, a2, a3 = os.pullEvent()
         if (event == "monitor_touch" or event == "mouse_click") then
             local x, y = a2, a3
             self:click(nil, event, x, y)
+        elseif (event == "timer" and a1 == timer) then
+            timer = os.startTimer(api.screenThreadInterval)
+            if (type(self.cb.thread) == "thread" and coroutine.status(self.cb.thread) == "suspended") then
+                coroutine.resume(self.cb.thread, self)
+            else
+                self.cb.thread(self)
+            end
         end
     until not self.wait
 end
@@ -345,9 +366,13 @@ local text = extend(colorAble)
 function text._init(self, str)
     colorAble._init(self)
     self.text = str
+    self.slow = nil
 end
 function text:setText(str)
     self.text = str
+end
+function text:setSlow(cps)
+    self.slow = cps
 end
 function text:nl(x, y)
     x = 1
@@ -362,6 +387,13 @@ function text:nl(x, y)
     end
     return x, y
 end
+function text:_write(str)
+    if (self.slow ~= nil) then
+        textutils.slowWrite(str, self.slow)
+    else
+        term.write(str)
+    end
+end
 function text:draw(screen)
     if self.parent == nil then
         error("Missing parent-Widget", 2)
@@ -370,7 +402,7 @@ function text:draw(screen)
     local x, y = p:getCursorPosition()
     
     --print(self.c.fg, " ")
-    pxdebug(self.text:sub(1, 4), "#", self.c.bg)
+    --pxdebug(self.text:sub(1, 4), "#", self.c.bg)
     --d(self.c)
     self:applyColors()
     
@@ -398,7 +430,7 @@ function text:draw(screen)
                 else
                     x = x + 1
                     self.size.w = math.max(self.size.w, x - 1)
-                    term.write(char)
+                    self:_write(char)
                 end
             end
             offset = offset + 1
@@ -408,7 +440,7 @@ function text:draw(screen)
             elseif (x + wordlength - 1 > linelength) then
                 x, y = self:nl(x, y)
             end
-            term.write(string.sub(self.text, offset, i - 1))
+            self:_write(string.sub(self.text, offset, i - 1))
             x = x + wordlength
             self.size.w = math.max(self.size.w, x - 1)
             offset = i
@@ -504,7 +536,8 @@ function radioGroup:addEntry(value, label)
             this.cb.change(this, button, this.value, button.value, frame)
         end
         this.value = button.value
-        frame:getScreen():draw()
+        pxdebug("click button ", button.pos.x, " ", button.pos.y)
+        this:redraw(frame)
     end)
     self.entries[value] = self.parent:add(b)
     self.parent:add(create(text, "\n"))
@@ -514,6 +547,14 @@ function radioGroup:draw(frame)
     for value, button in pairs(self.entries) do
         local pf = self.value == button.value and "(X) " or "( ) "
         button:setText(pf .. button.label)
+    end
+end
+function radioGroup:redraw(frame)
+    for value, button in pairs(self.entries) do
+        local pf = self.value == button.value and "(X) " or "( ) "
+        button:setText(pf .. button.label)
+        frame:setCursorPosition(button.pos.x, button.pos.y)
+        button:draw()
     end
 end
 
