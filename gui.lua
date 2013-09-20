@@ -60,7 +60,7 @@ local function pxdebug(...)
     local tmpx, tmpy = term.getCursorPos()
     pxdebug_y = tmpy
     local w, h = term.getSize()
-    if (pxdebug_y > h) then
+    if (pxdebug_y >= h) then
         pxdebug_y = 1
     end
     term.setCursorPos(x, y)
@@ -497,7 +497,7 @@ function button:click(frame, event, x, y)
         self.c = tmp;
         sleep(0.2)
     end]]
-    if (self ~= nil) then
+    if (self.cb ~= nil) then
         self.cb(self, frame, event, x, y)
     end
 end
