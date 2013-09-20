@@ -8,6 +8,24 @@
 local api = {
     debug = false,
     screenThreadInterval = 1,
+    colorcodes = {
+        ["0"] = colors.black,
+        ["1"] = colors.blue,
+        ["2"] = colors.lime,
+        ["3"] = colors.green,
+        ["4"] = colors.brown,
+        ["5"] = colors.magenta,
+        ["6"] = colors.orange,
+        ["7"] = colors.lightGray,
+        ["8"] = colors.gray,
+        ["9"] = colors.cyan,
+        ["a"] = colors.lime,
+        ["b"] = colors.lightBlue,
+        ["c"] = colors.red,
+        ["d"] = colors.pink,
+        ["e"] = colors.yellow,
+        ["f"] = colors.white,
+    },
 }
 
 -- -------------------
@@ -412,7 +430,7 @@ function text:draw(screen)
     local linelength, blockheight = p:getInnerSize()
     
     local offset = 1
-    local i = string.find(self.text, "%s")
+    local i = string.find(self.text, "[%s$]")
     while (offset <= string.len(self.text)) do
         if (i == nil) then
             i = string.len(self.text) + 1
@@ -424,6 +442,19 @@ function text:draw(screen)
                 -- ignore
             elseif (char == "\n") then
                 x, y = self:nl(x, y)
+            elseif (char == "$") then
+                local ccode = string.sub(self.text, offset + 1, offset + 1)
+                if (api.colorcodes[ccode] ~= nil) then
+                    term.setTextColor(api.colorcodes[ccode])
+                    offset = offset + 1
+                elseif (ccode == "r") then
+                    if (self.c.fg) then
+                        term.setTextColor(self.c.fg)
+                    end
+                    offset = offset + 1
+                elseif (ccode ~= "$") then
+                    self:_write(char)
+                end
             else
                 if (x + 1 > linelength) then
                     x, y = self:nl(x, y)
@@ -445,7 +476,7 @@ function text:draw(screen)
             self.size.w = math.max(self.size.w, x - 1)
             offset = i
         end
-        i = string.find(self.text, "%s", offset)
+        i = string.find(self.text, "[%s$]", offset)
     end
     --pxdebug(string.sub(self.text, 1, 6), " ", self.size.w, " ", self.size.h)
 end

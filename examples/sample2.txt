@@ -1,0 +1,17 @@
+Dies ist ein $cFarb$r-Beispiel
+$0Color #0
+$1Color #1
+$2Color #2
+$3Color #3
+$4Color #4
+$5Color #5
+$6Color #6
+$7Color #7
+$8Color #8
+$9Color #9
+$aColor #a
+$bColor #b
+$cColor #c
+$dColor #d
+$eColor #e
+$fColor #f
